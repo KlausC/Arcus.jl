@@ -79,7 +79,6 @@ end
 
 Construct Arc from degree value.
 """
-
 # special exactness if d given as integer
 function Arcd(d::Real)
   d = mod(d, 360)
@@ -310,7 +309,7 @@ end
 *(f::Real, a::Arc) = Arc(rad(a) * f)
 *(a::Arc, f::Real) = f * a
 
-# diveded
+# divided
 /(a::Arc, f::Real) = (1.0 / f) * a
 
 # Not required if not Arc <: AbstractFloat
