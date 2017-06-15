@@ -1,9 +1,12 @@
+#! /usr/bin/env julia
 
 using Arcus
 using Base.Test
 
 import Base.isapprox
-isapprox(a::Arc, b::Arc) = abs(mod(Float64(a) - Float64(b), 2pi)) <= 10eps()
+isapprox(a::Float64, b::Float64) = isapprox(a, b, atol = 2eps(typeof(a))) || isapprox(1/a, 1/b, atol = 2eps())
+
+@testset begin
 
 @testset "creation" begin
 
@@ -23,22 +26,46 @@ end
   @test Arcd(360) == Arcd(0)
 end
 
-@testset "arithmetic" begin
+# @testset "arithmetic" begin
+  @test -Arc(pi*3/8) == Arc(-pi*3/8)
+  @test -Arc(pi*3/4) == Arc(-pi*3/4)
+  @test -Arc(pi*5/4) == Arc(-pi*5/4)
+  @test -Arc(pi*7/4) == Arc(-pi*7/4)
   @test -Arc(pi/3) == Arc(5pi/3)
   @test Arc(1) + Arc(1) == 2Arc(1)
   @test Arc(1) + Arc(2) ≈ Arc(3)
   @test Arc(3) - Arc(2) ≈ Arc(1)
   @test -Arc(1) + Arc(3) ≈ Arc(2)
   @test Arcd(190) / 170 ≈ Arcd(-1.0)
-  @test Arc(0.3) * 100 ≈ Arc(mod(30.0, 2pi))
+  @test Arc(0.3) * 30 ≈ Arc(mod(9.0, 2pi))
   @test 20Arcd(260) == Arcd(260) * 20
+# end
+
+@testset "representation as sine 0" begin
+  @test reinterpret(Float64, Arc(0)) == 0
 end
 
-@testset "representation as sine $(w)" for w in linspace(-pi/4 + 2eps(), pi/4, 11)
+@testset "representation as sine $(w)" for w in linspace(-pi/4, pi/4, 11)
   @test reinterpret(Float64, Arc(w)) ≈ sin(w)
 end
 
-@testset "trigonometric functions $w" for w in linspace(0.0, 2pi-10eps(), 18)
+const logsp = logspace(-16, 306, 5) * (nextfloat(0.0)*1e16)
+
+@testset "representation as sine $(w)" for w in logsp
+  @test reinterpret(Float64, Arc(w)) == sin(w)
+end
+
+const ep = eps(2.0)
+@testset "trigonometric functions $w" for w in 0:45:360
+  @test sin(Arcd(w)) ≈ sind(w)
+  @test cos(Arcd(w)) ≈ cosd(w)
+  @test tan(Arcd(w)) ≈ tand(w)
+  @test csc(Arcd(w)) ≈ cscd(w)
+  @test sec(Arcd(w)) ≈ secd(w)
+  @test cot(Arcd(w)) ≈ cotd(w)
+end
+
+@testset "trigonometric functions $w" for w in 2/7:2/3:2pi
   @test sin(Arc(w)) ≈ sin(w)
   @test cos(Arc(w)) ≈ cos(w)
   @test tan(Arc(w)) ≈ tan(w)
@@ -47,7 +74,6 @@ end
   @test cot(Arc(w)) ≈ cot(w)
 end
 
-nothing
-
+end
 
 

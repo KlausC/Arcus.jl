@@ -24,11 +24,12 @@ module Arcus
 
 export Arc, Arcd, deg, rad, sincos
 
-import Base: convert, show, zero, bits
+import Base: convert, show, read, write, zero, bits, isapprox
 import Base: sin, csc, cos, sec, tan, cot
 import Base: (+), (-), (*), (/)
 
 bitstype 64 Arc
+const T = Float64
 
 const expomax = exponent(realmax(0.0)) ÷ 3 # use all available exponent space
 const fmin = 2.0^-expomax
@@ -46,7 +47,12 @@ const pi2 = pi / 2
 
 Construct Arc from cartesian coordinates. `(s, c)` is forced to unit size.
 """
-Arc(s::Real, c::Real) = reinterpret(Arc, sc_to_arc(s, c))
+function Arc(s::Real, c::Real)
+  h = hypot(s, c)
+  s /= h
+  c /= h
+  sc_to_arc(s, c)
+end
 
 """
 
@@ -55,9 +61,9 @@ Arc(s::Real, c::Real) = reinterpret(Arc, sc_to_arc(s, c))
 Construct Arc from radian value. If rad ∉ (-2π,2π] mind rounding errors.
 """
 function Arc(r::Real)
-  r = mod(r, twopi)
+  r = rem(r, twopi)
   if mod(r, pi2) == 0
-    case = Int(fld(r, pi2))
+    case = mod(Int(fld(r, pi2)), 4)
     if case == 0
       Arc(0.0, 1.0)
     elseif case == 1
@@ -69,7 +75,7 @@ function Arc(r::Real)
     end
   else
     s, c = sin(r), cos(r)
-    Arc(s, c)
+    sc_to_arc(s, c)
   end
 end
 
@@ -101,9 +107,7 @@ end
 # working function for constructor
 function sc_to_arc(s::Real, c::Real)
   iq = quadr(s, c)
-  h = hypot(s, c)
-  s /= h
-  c /= h
+  rep =
   if iq == 0
     s
   elseif iq == 1
@@ -116,6 +120,7 @@ function sc_to_arc(s::Real, c::Real)
     ( abs(c) <= fmin ) && (c = fmin)
     c * f3
   end
+  reinterpret(Arc, rep)
 end
 
 # Find quadrant number from s and c
@@ -131,12 +136,38 @@ end
 
 """
 
+  `rad(a::Arc) -> rad::Float64 ∈ (-π, π]`
+
+  Calculate radiant of `a`.
+"""
+function rad(a::Arc)
+  sc = reinterpret(T, a)
+  sca = abs(sc)
+  if sca < f0
+    asin(sc)
+  elseif sca < f1
+    sc /= f1
+    ( abs(sc) <= fmin ) && return pi2
+    acos(sc)
+  elseif sca < f2
+    ( abs(sc) <= fmin ) && return 1π
+    sc /= f2
+    copysign(1π, sc) - asin(sc)
+  else
+    ( sca <= fmin ) && return -pi2
+    sc /= f3
+    -acos(sc)
+  end
+end
+
+"""
+
   `sincos(a::Arc) -> (s, c)::Tuple{Float64,Float64}`
 
 Calculate both sine and cosine of `a`.
 """
 function sincos(a::Arc)
-  sc = reinterpret(Float64, a)
+  sc = reinterpret(T, a)
   sca = abs(sc)
   if sca < f0
     sc, sq(sc)
@@ -162,14 +193,14 @@ end
 Calculate the sine of `a`.
 """
 function sin(a::Arc)
-  sc = reinterpret(Float64, a)
+  sc = reinterpret(T, a)
   sca = abs(sc)
   if sca <= f0
     sc
-  elseif sca <= f1
+  elseif sca < f1
     sc /= f1
     sq(sc)
-  elseif sca <= f2
+  elseif sca < f2
     sc /= f2
     ( abs(sc) <= fmin ) && return 0.0
     sc
@@ -186,15 +217,15 @@ end
 Calculate the cosine of `a`.
 """
 function cos(a::Arc)
-  sc = reinterpret(Float64, a)
+  sc = reinterpret(T, a)
   sca = abs(sc)
   if sca <= f0
     sq(sc)
-  elseif sca <= f1
+  elseif sca < f1
     sc /= f1
     ( abs(sc) <= fmin ) && return 0.0
     sc
-  elseif sca <= f2
+  elseif sca < f2
     sc /= f2
     -sq(sc)
   else
@@ -237,22 +268,11 @@ Calculate the cotangent of `a`.
 """
 cot(a::Arc) = 1.0 / tan(a)
 
-function convert(::Type{Float64}, a::Arc)
-  s, c = sincos(a)
-  atan2(s, c)
-end
+convert(::Type{T}, a::Arc) = rad(a)
 
 convert(::Type{Arc}, x::Real) = Arc(x)
 
 """
-
-  `rad(a::Arc) -> r::Float`
-
-Convert `a` to rad in `(-π,π]`.
-"""
-rad(a::Arc) = convert(Float64, a)
-"""
-
   `deg(a::Arc) -> r::Float`
 
 Convert `a` to degrees in `(180,180]`.
@@ -266,21 +286,32 @@ zero(::Arc) = zero_arc
 
 show(io::IO, a::Arc) =  print(io, "$(rad(a))r")
 
-bits(a::Arc) = bits(reinterpret(Float64, a))
+function read(s::IO, ::Type{Arc})
+    reinterpret(Arc, read(s, T))
+end
+function write(s::IO, a::Arc)
+  write(s, reinterpret(T, a))
+end
+
+bits(a::Arc) = bits(reinterpret(T, a))
 
 # Supported arithmetic functions
 # plus
 function +(a::Arc, b::Arc)
-  sa, ca = sincos(a)
-  sb, cb = sincos(b)
-  Arc(sa*cb + sb*ca, ca*cb - sa*sb)
+  # sa, ca = sincos(a)
+  # sb, cb = sincos(b)
+  # Arc(sa*cb + sb*ca, ca*cb - sa*sb)
+  as, bs = rad(a), rad(b)
+  Arc(as + bs)
 end
 
 # minus
 function -(a::Arc, b::Arc)
-  sa, ca = sincos(a)
-  sb, cb = sincos(b)
-  Arc(sa*cb - sb*ca, ca*cb + sa*sb)
+  # sa, ca = sincos(a)
+  # sb, cb = sincos(b)
+  # Arc(sa*cb - sb*ca, ca*cb + sa*sb)
+  as, bs = rad(a), rad(b)
+  Arc(as - bs)
 end
 
 # unary -
@@ -289,10 +320,10 @@ function -(a::Arc)
   Arc(-sa, ca)
 end
 
-# times
+# times real number
 function *(f::Integer, a::Arc)
   if abs(f) > 2
-    Float64(f) * a
+    T(f) * a
   elseif f == 2
     a + a
   elseif f == -2
@@ -309,10 +340,12 @@ end
 *(f::Real, a::Arc) = Arc(rad(a) * f)
 *(a::Arc, f::Real) = f * a
 
-# divided
+# divided by real number
 /(a::Arc, f::Real) = (1.0 / f) * a
 
 # Not required if not Arc <: AbstractFloat
 # *(a::Arc, b::Arc) = error("invalid operation * with Arc")
+
+isapprox(a::Arc, b::Arc) = abs(mod(rad(a) - rad(b), 2pi)) <= eps()
 
 end # module Arcus
