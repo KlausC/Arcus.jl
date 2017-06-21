@@ -28,7 +28,9 @@ import Base: convert, show, read, write, zero, bits, isapprox
 import Base: sin, csc, cos, sec, tan, cot
 import Base: (+), (-), (*), (/)
 
-bitstype 64 Arc
+#-v0.5 bitstype 64 Arc
+primitive type Arc 64 end
+
 const T = Float64
 
 const expomax = exponent(realmax(0.0)) ÷ 3 # use all available exponent space
